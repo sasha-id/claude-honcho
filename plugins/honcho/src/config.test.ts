@@ -31,4 +31,13 @@ describe("resolveConfig — profile-aware host block lookup", () => {
     expect(config!.aiPeer).toBe("coder");
     expect(config!.profile).toBeUndefined();
   });
+
+  test("HONCHO_PROFILE=director + matching block → returns profile block", () => {
+    process.env.HONCHO_PROFILE = "director";
+    const config = resolveConfig(baseRaw, "claude_code");
+    expect(config).not.toBeNull();
+    expect(config!.workspace).toBe("7stars");
+    expect(config!.aiPeer).toBe("director");
+    expect(config!.profile).toBe("director");
+  });
 });

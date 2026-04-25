@@ -228,6 +228,10 @@ export interface HonchoCLAUDEConfig {
   logging?: boolean;
   /** When true, flat workspace/aiPeer fields apply to ALL hosts */
   globalOverride?: boolean;
+  /** Active honcho profile from HONCHO_PROFILE env var, or undefined when
+   *  unset. Useful for diagnostics; the host-block lookup already factors
+   *  this in. */
+  profile?: string;
 }
 
 function deepEqual(a: unknown, b: unknown): boolean {
@@ -288,9 +292,61 @@ export function resolveConfig(raw: HonchoFileConfig, host: HonchoHost): HonchoCL
   let workspace: string;
   let aiPeer: string;
 
-  const hostBlock = raw.hosts?.[host]
-    ?? raw.hosts?.[host.replace(/_/g, "-")]
-    ?? raw.hosts?.[host.replace(/-/g, "_")];
+  // Profile-aware host block lookup. HONCHO_PROFILE env var (set by `cl`
+  // wrapper or caller) selects a profile-suffixed block; falls back to
+  // bare host block when profile unset, missing, or empty after
+  // sanitization.
+  //
+  // Sanitization uses replace-with-`-` (matching `cl`'s `tr -c ... '-'`)
+  // so direct env settings like HONCHO_PROFILE=director.7stars yield the
+  // same lookup key (`director-7stars`) regardless of whether `cl`
+  // exported it or the user set it inline.
+  const profile = (process.env.HONCHO_PROFILE ?? "")
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  // Alias the HOST PORTION only ("claude_code" ↔ "claude-code"). The
+  // profile suffix must stay byte-exact — a blanket `replace(/-/g, "_")`
+  // on the full `${host}.${profile}` string would also rewrite the
+  // profile (e.g. `director-7stars` → `director_7stars`), pointing at
+  // a different profile.
+  const hostAliases = [
+    host,
+    host.replace(/_/g, "-"),
+    host.replace(/-/g, "_"),
+  ];
+
+  let hostBlock: HostConfig | undefined;
+  let profileMatched = false;
+
+  if (profile) {
+    for (const h of hostAliases) {
+      const key = `${h}.${profile}`;
+      if (raw.hosts?.[key]) {
+        hostBlock = raw.hosts[key];
+        profileMatched = true;
+        break;
+      }
+    }
+  }
+
+  if (!hostBlock) {
+    for (const h of hostAliases) {
+      if (raw.hosts?.[h]) {
+        hostBlock = raw.hosts[h];
+        break;
+      }
+    }
+  }
+
+  if (profile && !profileMatched) {
+    // Profile requested but no matching block — log and fall back.
+    // Logger may not be initialized in early hooks; use stderr directly.
+    process.stderr.write(
+      `[honcho] HONCHO_PROFILE=${profile} but hosts.${host}.${profile} missing — using bare ${host}\n`
+    );
+  }
 
   if (raw.globalOverride === true) {
     // Global override: flat fields apply to ALL hosts
@@ -334,6 +390,7 @@ export function resolveConfig(raw: HonchoFileConfig, host: HonchoHost): HonchoCL
     enabled: hostBlock?.enabled ?? raw.enabled,
     logging: hostBlock?.logging ?? raw.logging,
     globalOverride: raw.globalOverride,
+    profile: profile || undefined,
   };
 
   return mergeWithEnvVars(config);
