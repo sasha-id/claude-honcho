@@ -470,7 +470,7 @@ function mergeWithEnvVars(config: HonchoCLAUDEConfig): HonchoCLAUDEConfig {
  * etc.) so the silent divergence is visible.
  */
 export function warnIfProfileRoutedSave(host: HonchoHost): void {
-  if (process.env.HONCHO_PROFILE) {
+  if (process.env.HONCHO_PROFILE?.trim()) {
     process.stderr.write(
       `[honcho] saveConfig() writing to bare hosts.${host} while ` +
       `HONCHO_PROFILE=${process.env.HONCHO_PROFILE} — profile blocks ` +

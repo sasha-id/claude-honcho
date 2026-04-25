@@ -1,6 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach, spyOn } from "bun:test";
-import { resolveConfig, type HonchoFileConfig } from "./config";
-import { warnIfProfileRoutedSave } from "./config";
+import { resolveConfig, warnIfProfileRoutedSave, type HonchoFileConfig } from "./config";
 
 const ORIG_PROFILE = process.env.HONCHO_PROFILE;
 const ORIG_API_KEY = process.env.HONCHO_API_KEY;
@@ -123,6 +122,18 @@ describe("warnIfProfileRoutedSave — profile-routed write guard", () => {
 
   test("HONCHO_PROFILE empty string → no stderr output", () => {
     process.env.HONCHO_PROFILE = "";
+    const stderrSpy = spyOn(process.stderr, "write");
+    try {
+      warnIfProfileRoutedSave("claude_code");
+      const calls = stderrSpy.mock.calls.map(call => String(call[0]));
+      expect(calls.some(msg => msg.includes("HONCHO_PROFILE"))).toBe(false);
+    } finally {
+      stderrSpy.mockRestore();
+    }
+  });
+
+  test("HONCHO_PROFILE whitespace only → no stderr output (matches resolveConfig)", () => {
+    process.env.HONCHO_PROFILE = "   ";
     const stderrSpy = spyOn(process.stderr, "write");
     try {
       warnIfProfileRoutedSave("claude_code");
