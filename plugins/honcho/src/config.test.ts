@@ -58,4 +58,20 @@ describe("resolveConfig — profile-aware host block lookup", () => {
       stderrSpy.mockRestore();
     }
   });
+
+  test("HONCHO_PROFILE with illegal chars → sanitized to dash, matches sanitized block", () => {
+    process.env.HONCHO_PROFILE = "director.7stars";
+    const rawWithSanitizedBlock: HonchoFileConfig = {
+      ...baseRaw,
+      hosts: {
+        ...baseRaw.hosts,
+        "claude_code.director-7stars": { workspace: "7stars", aiPeer: "director-7stars" },
+      },
+    };
+    const config = resolveConfig(rawWithSanitizedBlock, "claude_code");
+    expect(config).not.toBeNull();
+    expect(config!.workspace).toBe("7stars");
+    expect(config!.aiPeer).toBe("director-7stars");
+    expect(config!.profile).toBe("director-7stars");
+  });
 });
