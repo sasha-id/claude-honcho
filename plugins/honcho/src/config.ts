@@ -155,7 +155,7 @@ export async function initHook(): Promise<void> {
 // ============================================
 
 /** Raw shape of ~/.honcho/config.json on disk */
-interface HonchoFileConfig {
+export interface HonchoFileConfig {
   apiKey?: string;
   peerName?: string;
   workspace?: string;
@@ -278,7 +278,7 @@ export function loadConfig(host?: HonchoHost): HonchoCLAUDEConfig | null {
   return loadConfigFromEnv(resolvedHost);
 }
 
-function resolveConfig(raw: HonchoFileConfig, host: HonchoHost): HonchoCLAUDEConfig | null {
+export function resolveConfig(raw: HonchoFileConfig, host: HonchoHost): HonchoCLAUDEConfig | null {
   const apiKey = process.env.HONCHO_API_KEY || raw.apiKey;
   if (!apiKey) return null;
 
