@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach } from "bun:test";
+import { describe, test, expect, beforeEach, afterEach, spyOn } from "bun:test";
 import { resolveConfig, type HonchoFileConfig } from "./config";
 
 const ORIG_PROFILE = process.env.HONCHO_PROFILE;
@@ -39,5 +39,23 @@ describe("resolveConfig — profile-aware host block lookup", () => {
     expect(config!.workspace).toBe("7stars");
     expect(config!.aiPeer).toBe("director");
     expect(config!.profile).toBe("director");
+  });
+
+  test("HONCHO_PROFILE=ghost + no matching block → bare block + stderr warn", () => {
+    process.env.HONCHO_PROFILE = "ghost";
+    const stderrSpy = spyOn(process.stderr, "write");
+    try {
+      const config = resolveConfig(baseRaw, "claude_code");
+      expect(config).not.toBeNull();
+      expect(config!.workspace).toBe("hermes");
+      expect(config!.aiPeer).toBe("coder");
+      expect(config!.profile).toBe("ghost");
+      const calls = stderrSpy.mock.calls.map(call => String(call[0]));
+      expect(calls.some(msg =>
+        msg.includes("HONCHO_PROFILE=ghost") && msg.includes("missing")
+      )).toBe(true);
+    } finally {
+      stderrSpy.mockRestore();
+    }
   });
 });
