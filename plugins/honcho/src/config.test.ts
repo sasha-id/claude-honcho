@@ -74,4 +74,20 @@ describe("resolveConfig — profile-aware host block lookup", () => {
     expect(config!.aiPeer).toBe("director-7stars");
     expect(config!.profile).toBe("director-7stars");
   });
+
+  test("profile suffix with hyphens not corrupted by alias chain", () => {
+    process.env.HONCHO_PROFILE = "director-7stars";
+    const rawAmbiguous: HonchoFileConfig = {
+      ...baseRaw,
+      hosts: {
+        ...baseRaw.hosts,
+        "claude_code.director-7stars": { workspace: "7stars-dash",  aiPeer: "director-dash"  },
+        "claude_code.director_7stars": { workspace: "7stars-under", aiPeer: "director-under" },
+      },
+    };
+    const config = resolveConfig(rawAmbiguous, "claude_code");
+    expect(config).not.toBeNull();
+    expect(config!.workspace).toBe("7stars-dash");
+    expect(config!.aiPeer).toBe("director-dash");
+  });
 });
