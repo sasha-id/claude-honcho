@@ -462,6 +462,25 @@ function mergeWithEnvVars(config: HonchoCLAUDEConfig): HonchoCLAUDEConfig {
 }
 
 /**
+ * Emit a stderr warning when saveConfig is called while HONCHO_PROFILE
+ * is set. Profile-routed sessions read from hosts.<host>.<profile> but
+ * saveConfig always writes to the bare hosts.<host> block — profile
+ * blocks are hand-curated, not runtime-mutable. Fires for any saveConfig
+ * caller (set_config, setSessionForPath, setPluginEnabled, setEndpoint,
+ * etc.) so the silent divergence is visible.
+ */
+export function warnIfProfileRoutedSave(host: HonchoHost): void {
+  if (process.env.HONCHO_PROFILE) {
+    process.stderr.write(
+      `[honcho] saveConfig() writing to bare hosts.${host} while ` +
+      `HONCHO_PROFILE=${process.env.HONCHO_PROFILE} — profile blocks ` +
+      `are hand-curated; edit ~/.honcho/config.json directly to change ` +
+      `the profile block.\n`
+    );
+  }
+}
+
+/**
  * Write-back: read-merge-write to avoid clobbering other hosts' config.
  *
  * Convention:
@@ -498,6 +517,7 @@ export function saveConfig(config: HonchoCLAUDEConfig): void {
   // Keep workspace/aiPeer host-local, but avoid materializing root defaults
   // into new host overrides. This preserves root fallback behavior.
   const host = getDetectedHost();
+  warnIfProfileRoutedSave(host);
   if (!existing.hosts) existing.hosts = {};
   const existingHost: HostConfig = existing.hosts[host] ?? {};
 
