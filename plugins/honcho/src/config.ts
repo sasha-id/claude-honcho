@@ -282,6 +282,17 @@ export function loadConfig(host?: HonchoHost): HonchoCLAUDEConfig | null {
   return loadConfigFromEnv(resolvedHost);
 }
 
+// Module-scoped dedupe for the missing-profile stderr warning. Lifetime
+// matches the hook process (one Claude Code hook invocation = one process),
+// so the Set effectively warns once per (host, profile) per hook firing.
+const _warnedMissingProfile = new Set<string>();
+
+// Test-only: drop the dedupe cache between assertions that exercise the
+// warning path. Not part of the public API; underscore-prefixed by convention.
+export function _resetProfileWarnCacheForTests(): void {
+  _warnedMissingProfile.clear();
+}
+
 export function resolveConfig(raw: HonchoFileConfig, host: HonchoHost): HonchoCLAUDEConfig | null {
   const apiKey = process.env.HONCHO_API_KEY || raw.apiKey;
   if (!apiKey) return null;
@@ -311,11 +322,11 @@ export function resolveConfig(raw: HonchoFileConfig, host: HonchoHost): HonchoCL
   // on the full `${host}.${profile}` string would also rewrite the
   // profile (e.g. `director-7stars` → `director_7stars`), pointing at
   // a different profile.
-  const hostAliases = [
+  const hostAliases = Array.from(new Set([
     host,
     host.replace(/_/g, "-"),
     host.replace(/-/g, "_"),
-  ];
+  ]));
 
   let hostBlock: HostConfig | undefined;
   let profileMatched = false;
@@ -343,9 +354,16 @@ export function resolveConfig(raw: HonchoFileConfig, host: HonchoHost): HonchoCL
   if (profile && !profileMatched) {
     // Profile requested but no matching block — log and fall back.
     // Logger may not be initialized in early hooks; use stderr directly.
-    process.stderr.write(
-      `[honcho] HONCHO_PROFILE=${profile} but hosts.${host}.${profile} missing — using bare ${host}\n`
-    );
+    // Dedupe per (host, profile) per process: loadConfig() is called from
+    // many helpers per hook invocation, so a naive write produces N
+    // duplicate lines that drown real diagnostics.
+    const warnKey = `${host}.${profile}`;
+    if (!_warnedMissingProfile.has(warnKey)) {
+      _warnedMissingProfile.add(warnKey);
+      process.stderr.write(
+        `[honcho] HONCHO_PROFILE=${profile} but hosts.${host}.${profile} missing — using bare ${host}\n`
+      );
+    }
   }
 
   if (raw.globalOverride === true) {

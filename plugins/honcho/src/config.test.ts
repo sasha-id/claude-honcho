@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach, spyOn } from "bun:test";
-import { resolveConfig, warnIfProfileRoutedSave, type HonchoFileConfig } from "./config";
+import { resolveConfig, warnIfProfileRoutedSave, _resetProfileWarnCacheForTests, type HonchoFileConfig } from "./config";
 
 const ORIG_PROFILE = process.env.HONCHO_PROFILE;
 const ORIG_API_KEY = process.env.HONCHO_API_KEY;
@@ -7,6 +7,7 @@ const ORIG_API_KEY = process.env.HONCHO_API_KEY;
 beforeEach(() => {
   delete process.env.HONCHO_PROFILE;
   delete process.env.HONCHO_API_KEY;
+  _resetProfileWarnCacheForTests();
 });
 
 afterEach(() => {
@@ -73,6 +74,38 @@ describe("resolveConfig — profile-aware host block lookup", () => {
     expect(config!.workspace).toBe("7stars");
     expect(config!.aiPeer).toBe("director-7stars");
     expect(config!.profile).toBe("director-7stars");
+  });
+
+  test("HONCHO_PROFILE sanitizing to empty → bare block, no warning", () => {
+    process.env.HONCHO_PROFILE = "...";
+    const stderrSpy = spyOn(process.stderr, "write");
+    try {
+      const config = resolveConfig(baseRaw, "claude_code");
+      expect(config).not.toBeNull();
+      expect(config!.workspace).toBe("hermes");
+      expect(config!.aiPeer).toBe("coder");
+      expect(config!.profile).toBeUndefined();
+      const calls = stderrSpy.mock.calls.map(call => String(call[0]));
+      expect(calls.some(msg => msg.includes("HONCHO_PROFILE"))).toBe(false);
+    } finally {
+      stderrSpy.mockRestore();
+    }
+  });
+
+  test("missing-profile warning dedupes across multiple resolveConfig calls", () => {
+    process.env.HONCHO_PROFILE = "ghost";
+    const stderrSpy = spyOn(process.stderr, "write");
+    try {
+      resolveConfig(baseRaw, "claude_code");
+      resolveConfig(baseRaw, "claude_code");
+      resolveConfig(baseRaw, "claude_code");
+      const matching = stderrSpy.mock.calls
+        .map(call => String(call[0]))
+        .filter(msg => msg.includes("HONCHO_PROFILE=ghost"));
+      expect(matching.length).toBe(1);
+    } finally {
+      stderrSpy.mockRestore();
+    }
   });
 
   test("profile suffix with hyphens not corrupted by alias chain", () => {
