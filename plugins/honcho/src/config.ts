@@ -629,6 +629,14 @@ export function getSessionForPath(cwd: string): string | null {
  *                      when available to avoid cross-session collision from the global cache.
  */
 export function getSessionName(cwd: string, instanceId?: string): string {
+  // Env var override — highest priority, mirrors HONCHO_PROFILE pattern.
+  // Sits above the manual sessions[cwd] map and the strategy switch so an
+  // operator can pin the session at launch without editing config.json.
+  const envSession = (process.env.HONCHO_SESSION ?? "")
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (envSession) return envSession;
+
   const config = loadConfig();
   const strategy = config?.sessionStrategy ?? "per-directory";
 

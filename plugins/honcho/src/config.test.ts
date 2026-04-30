@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach, spyOn } from "bun:test";
-import { resolveConfig, warnIfProfileRoutedSave, _resetProfileWarnCacheForTests, type HonchoFileConfig } from "./config";
+import { resolveConfig, warnIfProfileRoutedSave, _resetProfileWarnCacheForTests, getSessionName, type HonchoFileConfig } from "./config";
 
 const ORIG_PROFILE = process.env.HONCHO_PROFILE;
 const ORIG_API_KEY = process.env.HONCHO_API_KEY;
@@ -175,5 +175,53 @@ describe("warnIfProfileRoutedSave — profile-routed write guard", () => {
     } finally {
       stderrSpy.mockRestore();
     }
+  });
+});
+
+const ORIG_HONCHO_SESSION = process.env.HONCHO_SESSION;
+
+describe("getSessionName — HONCHO_SESSION env var", () => {
+  beforeEach(() => {
+    delete process.env.HONCHO_SESSION;
+  });
+
+  afterEach(() => {
+    if (ORIG_HONCHO_SESSION !== undefined) process.env.HONCHO_SESSION = ORIG_HONCHO_SESSION;
+    else delete process.env.HONCHO_SESSION;
+  });
+
+  test("HONCHO_SESSION=foo → returns 'foo' (skips loadConfig path)", () => {
+    process.env.HONCHO_SESSION = "foo";
+    expect(getSessionName("/tmp/anything")).toBe("foo");
+  });
+
+  test("HONCHO_SESSION=Foo.Bar! → sanitized to 'Foo-Bar' (case preserved)", () => {
+    process.env.HONCHO_SESSION = "Foo.Bar!";
+    expect(getSessionName("/tmp/anything")).toBe("Foo-Bar");
+  });
+
+  test("HONCHO_SESSION=--- → sanitizes to empty → falls through (no env-derived name)", () => {
+    process.env.HONCHO_SESSION = "---";
+    const result = getSessionName("/tmp/somedir");
+    // Falls through to existing logic. We assert only that the env-var path
+    // didn't return the literal "---" or empty string.
+    expect(result).not.toBe("---");
+    expect(result).not.toBe("");
+  });
+
+  test("HONCHO_SESSION='   ' (whitespace) → falls through", () => {
+    process.env.HONCHO_SESSION = "   ";
+    const result = getSessionName("/tmp/somedir");
+    expect(result).not.toBe("   ");
+    expect(result).not.toBe("");
+  });
+
+  test("HONCHO_SESSION unset → falls through to existing logic", () => {
+    delete process.env.HONCHO_SESSION;
+    const result = getSessionName("/tmp/somedir");
+    // Existing logic depends on disk config; we just check the env-var path
+    // didn't intercept (returned a non-empty value derived from cwd or strategy).
+    expect(typeof result).toBe("string");
+    expect(result.length).toBeGreaterThan(0);
   });
 });
