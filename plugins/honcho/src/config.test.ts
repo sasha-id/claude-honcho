@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach, spyOn } from "bun:test";
-import { resolveConfig, warnIfProfileRoutedSave, _resetProfileWarnCacheForTests, getSessionName, type HonchoFileConfig, type HonchoCLAUDEConfig } from "./config";
+import { resolveConfig, warnIfProfileRoutedSave, _resetProfileWarnCacheForTests, getSessionName, setSessionForPath, type HonchoFileConfig, type HonchoCLAUDEConfig } from "./config";
 import * as configModule from "./config";
 
 const ORIG_PROFILE = process.env.HONCHO_PROFILE;
@@ -259,6 +259,74 @@ describe("getSessionName — HONCHO_SESSION env var", () => {
       expect(getSessionName("/tmp/myproj")).toBe("from-manual-map");
     } finally {
       loadConfigSpy.mockRestore();
+    }
+  });
+});
+
+describe("setSessionForPath — HONCHO_SESSION write guard", () => {
+  beforeEach(() => {
+    delete process.env.HONCHO_SESSION;
+  });
+
+  afterEach(() => {
+    if (ORIG_HONCHO_SESSION !== undefined) process.env.HONCHO_SESSION = ORIG_HONCHO_SESSION;
+    else delete process.env.HONCHO_SESSION;
+  });
+
+  test("HONCHO_SESSION set → setSessionForPath emits stderr warning", () => {
+    process.env.HONCHO_SESSION = "active-pin";
+    const stderrSpy = spyOn(process.stderr, "write");
+    const saveSpy = spyOn(configModule, "saveConfig").mockImplementation(() => {});
+    const loadSpy = spyOn(configModule, "loadConfig").mockReturnValue({
+      apiKey: "k", peerName: "p", workspace: "w", aiPeer: "a",
+    });
+    try {
+      setSessionForPath("/tmp/x", "manual-name");
+      const calls = stderrSpy.mock.calls.map(c => String(c[0]));
+      expect(calls.some(msg =>
+        msg.includes("HONCHO_SESSION=active-pin") &&
+        msg.includes("setSessionForPath")
+      )).toBe(true);
+    } finally {
+      stderrSpy.mockRestore();
+      saveSpy.mockRestore();
+      loadSpy.mockRestore();
+    }
+  });
+
+  test("HONCHO_SESSION unset → no warning", () => {
+    delete process.env.HONCHO_SESSION;
+    const stderrSpy = spyOn(process.stderr, "write");
+    const saveSpy = spyOn(configModule, "saveConfig").mockImplementation(() => {});
+    const loadSpy = spyOn(configModule, "loadConfig").mockReturnValue({
+      apiKey: "k", peerName: "p", workspace: "w", aiPeer: "a",
+    });
+    try {
+      setSessionForPath("/tmp/x", "manual-name");
+      const calls = stderrSpy.mock.calls.map(c => String(c[0]));
+      expect(calls.some(msg => msg.includes("HONCHO_SESSION"))).toBe(false);
+    } finally {
+      stderrSpy.mockRestore();
+      saveSpy.mockRestore();
+      loadSpy.mockRestore();
+    }
+  });
+
+  test("HONCHO_SESSION whitespace-only → no warning", () => {
+    process.env.HONCHO_SESSION = "   ";
+    const stderrSpy = spyOn(process.stderr, "write");
+    const saveSpy = spyOn(configModule, "saveConfig").mockImplementation(() => {});
+    const loadSpy = spyOn(configModule, "loadConfig").mockReturnValue({
+      apiKey: "k", peerName: "p", workspace: "w", aiPeer: "a",
+    });
+    try {
+      setSessionForPath("/tmp/x", "manual-name");
+      const calls = stderrSpy.mock.calls.map(c => String(c[0]));
+      expect(calls.some(msg => msg.includes("HONCHO_SESSION"))).toBe(false);
+    } finally {
+      stderrSpy.mockRestore();
+      saveSpy.mockRestore();
+      loadSpy.mockRestore();
     }
   });
 });
