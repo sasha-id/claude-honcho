@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach, spyOn } from "bun:test";
-import { resolveConfig, warnIfProfileRoutedSave, _resetProfileWarnCacheForTests, getSessionName, type HonchoFileConfig } from "./config";
+import { resolveConfig, warnIfProfileRoutedSave, _resetProfileWarnCacheForTests, getSessionName, type HonchoFileConfig, type HonchoCLAUDEConfig } from "./config";
+import * as configModule from "./config";
 
 const ORIG_PROFILE = process.env.HONCHO_PROFILE;
 const ORIG_API_KEY = process.env.HONCHO_API_KEY;
@@ -223,5 +224,41 @@ describe("getSessionName — HONCHO_SESSION env var", () => {
     // didn't intercept (returned a non-empty value derived from cwd or strategy).
     expect(typeof result).toBe("string");
     expect(result.length).toBeGreaterThan(0);
+  });
+
+  test("HONCHO_SESSION=foo overrides manual sessions[cwd] entry", () => {
+    process.env.HONCHO_SESSION = "foo";
+    const loadConfigSpy = spyOn(configModule, "loadConfig").mockReturnValue({
+      apiKey: "test",
+      peerName: "tester",
+      workspace: "test-ws",
+      aiPeer: "tester",
+      sessionStrategy: "per-directory",
+      sessionPeerPrefix: false,
+      sessions: { "/tmp/myproj": "from-manual-map" },
+    } as HonchoCLAUDEConfig);
+    try {
+      expect(getSessionName("/tmp/myproj")).toBe("foo");
+    } finally {
+      loadConfigSpy.mockRestore();
+    }
+  });
+
+  test("HONCHO_SESSION unset → manual sessions[cwd] still wins under per-directory", () => {
+    delete process.env.HONCHO_SESSION;
+    const loadConfigSpy = spyOn(configModule, "loadConfig").mockReturnValue({
+      apiKey: "test",
+      peerName: "tester",
+      workspace: "test-ws",
+      aiPeer: "tester",
+      sessionStrategy: "per-directory",
+      sessionPeerPrefix: false,
+      sessions: { "/tmp/myproj": "from-manual-map" },
+    } as HonchoCLAUDEConfig);
+    try {
+      expect(getSessionName("/tmp/myproj")).toBe("from-manual-map");
+    } finally {
+      loadConfigSpy.mockRestore();
+    }
   });
 });
