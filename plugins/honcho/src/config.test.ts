@@ -330,3 +330,42 @@ describe("setSessionForPath — HONCHO_SESSION write guard", () => {
     }
   });
 });
+
+describe("resolveConfig — HONCHO_SESSION diagnostic surface", () => {
+  beforeEach(() => {
+    delete process.env.HONCHO_SESSION;
+  });
+
+  afterEach(() => {
+    if (ORIG_HONCHO_SESSION !== undefined) process.env.HONCHO_SESSION = ORIG_HONCHO_SESSION;
+    else delete process.env.HONCHO_SESSION;
+  });
+
+  test("HONCHO_SESSION=foo → config.session='foo', sessionSource='env'", () => {
+    process.env.HONCHO_SESSION = "foo";
+    const config = resolveConfig(baseRaw, "claude_code");
+    expect(config?.session).toBe("foo");
+    expect(config?.sessionSource).toBe("env");
+  });
+
+  test("HONCHO_SESSION=Foo.Bar! → sanitized + casing preserved", () => {
+    process.env.HONCHO_SESSION = "Foo.Bar!";
+    const config = resolveConfig(baseRaw, "claude_code");
+    expect(config?.session).toBe("Foo-Bar");
+    expect(config?.sessionSource).toBe("env");
+  });
+
+  test("HONCHO_SESSION unset → session and sessionSource both undefined", () => {
+    delete process.env.HONCHO_SESSION;
+    const config = resolveConfig(baseRaw, "claude_code");
+    expect(config?.session).toBeUndefined();
+    expect(config?.sessionSource).toBeUndefined();
+  });
+
+  test("HONCHO_SESSION=--- → sanitizes to empty → both undefined", () => {
+    process.env.HONCHO_SESSION = "---";
+    const config = resolveConfig(baseRaw, "claude_code");
+    expect(config?.session).toBeUndefined();
+    expect(config?.sessionSource).toBeUndefined();
+  });
+});

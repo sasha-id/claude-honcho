@@ -232,6 +232,10 @@ export interface HonchoCLAUDEConfig {
    *  unset. Useful for diagnostics; the host-block lookup already factors
    *  this in. */
   profile?: string;
+  /** Resolved session pin from HONCHO_SESSION env var (sanitized). Undefined when env unset. */
+  session?: string;
+  /** Provenance of `session`. 'env' = HONCHO_SESSION-derived. Future: 'manual'/'computed' (deferred). */
+  sessionSource?: "env" | "manual" | "computed";
 }
 
 function deepEqual(a: unknown, b: unknown): boolean {
@@ -410,6 +414,14 @@ export function resolveConfig(raw: HonchoFileConfig, host: HonchoHost): HonchoCL
     globalOverride: raw.globalOverride,
     profile: profile || undefined,
   };
+
+  const sessionEnv = (process.env.HONCHO_SESSION ?? "")
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (sessionEnv) {
+    config.session = sessionEnv;
+    config.sessionSource = "env";
+  }
 
   return mergeWithEnvVars(config);
 }
