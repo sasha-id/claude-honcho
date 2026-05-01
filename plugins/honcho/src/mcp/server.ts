@@ -112,6 +112,7 @@ function handleGetConfig(cwd: string) {
     enabled: cfg.enabled !== false,
     logging: cfg.logging !== false,
     saveMessages: cfg.saveMessages !== false,
+    profile: cfg.profile,
   } : null;
 
   // Current status header values
@@ -196,6 +197,7 @@ function handleGetConfig(cwd: string) {
     ["session", sessionName ?? "unknown"],
     ["mapping", strategyLabels[cfg.sessionStrategy ?? "per-directory"] ?? cfg.sessionStrategy ?? "per directory"],
     ["peer", `${cfg.peerName} / ${cfg.aiPeer}`],
+    ...(cfg.profile ? [["profile", cfg.profile] as [string, string]] : []),
     ["host", hostLabel],
     ["messages", cfg.saveMessages !== false ? "saving enabled" : "saving disabled"],
     ["obs mode", cfg.observationMode ?? "unified"],
@@ -478,6 +480,7 @@ function handleSetConfig(args: Record<string, unknown>) {
     enabled: cfg.enabled !== false,
     logging: cfg.logging !== false,
     saveMessages: cfg.saveMessages !== false,
+    profile: cfg.profile,
   };
 
   // Warn about stale sessions when changing fields that affect session routing
