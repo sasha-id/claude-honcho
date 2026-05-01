@@ -113,6 +113,8 @@ function handleGetConfig(cwd: string) {
     logging: cfg.logging !== false,
     saveMessages: cfg.saveMessages !== false,
     profile: cfg.profile,
+    session: cfg.session,
+    sessionSource: cfg.sessionSource,
   } : null;
 
   // Current status header values

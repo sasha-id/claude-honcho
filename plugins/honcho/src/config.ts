@@ -232,6 +232,10 @@ export interface HonchoCLAUDEConfig {
    *  unset. Useful for diagnostics; the host-block lookup already factors
    *  this in. */
   profile?: string;
+  /** Resolved session pin from HONCHO_SESSION env var (sanitized). Undefined when env unset. */
+  session?: string;
+  /** Provenance of `session`. 'env' = HONCHO_SESSION-derived. Future: 'manual'/'computed' (deferred). */
+  sessionSource?: "env" | "manual" | "computed";
 }
 
 function deepEqual(a: unknown, b: unknown): boolean {
@@ -410,6 +414,14 @@ export function resolveConfig(raw: HonchoFileConfig, host: HonchoHost): HonchoCL
     globalOverride: raw.globalOverride,
     profile: profile || undefined,
   };
+
+  const sessionEnv = (process.env.HONCHO_SESSION ?? "")
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (sessionEnv) {
+    config.session = sessionEnv;
+    config.sessionSource = "env";
+  }
 
   return mergeWithEnvVars(config);
 }
@@ -629,6 +641,14 @@ export function getSessionForPath(cwd: string): string | null {
  *                      when available to avoid cross-session collision from the global cache.
  */
 export function getSessionName(cwd: string, instanceId?: string): string {
+  // Env var override — highest priority, mirrors HONCHO_PROFILE pattern.
+  // Sits above the manual sessions[cwd] map and the strategy switch so an
+  // operator can pin the session at launch without editing config.json.
+  const envSession = (process.env.HONCHO_SESSION ?? "")
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (envSession) return envSession;
+
   const config = loadConfig();
   const strategy = config?.sessionStrategy ?? "per-directory";
 
@@ -700,6 +720,24 @@ export function getSessionName(cwd: string, instanceId?: string): string {
 }
 
 export function setSessionForPath(cwd: string, sessionName: string): void {
+  // Warn at this writer (not at saveConfig) so HONCHO_SESSION's silent
+  // shadowing of sessions[cwd] is visible without false-positives from
+  // setEndpoint, setPluginEnabled, setMessageUploadConfig, etc. — those
+  // call saveConfig but don't touch the sessions field, so they are
+  // unaffected by the env var. DO NOT move this warning to saveConfig.
+  // (warnIfProfileRoutedSave at config.ts:490 lives at saveConfig because
+  // the entire host block is profile-routed; HONCHO_SESSION's narrower
+  // scope warrants a narrower placement.)
+  const envPin = (process.env.HONCHO_SESSION ?? "").trim();
+  if (envPin) {
+    process.stderr.write(
+      `[honcho] setSessionForPath(${cwd}=${sessionName}) while ` +
+      `HONCHO_SESSION=${process.env.HONCHO_SESSION} — env var routes ` +
+      `session reads past sessions[cwd]; this entry is dormant until ` +
+      `HONCHO_SESSION is unset.\n`
+    );
+  }
+
   const config = loadConfig();
   if (!config) return;
   if (!config.sessions) {
