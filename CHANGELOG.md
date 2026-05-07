@@ -2,6 +2,12 @@
 
 All notable changes to claude-honcho will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- `session-end` hook: skip the `[Session ended]` marker for empty sessions (`transcriptMessages.length === 0`). Empty sessions previously emitted a session-lifecycle marker that the Honcho deriver dutifully extracted as durable memory observations (e.g. "session ended at X UTC", "session contained zero messages") — burning deriver tokens on transcript-exhaust facts with no future-recall value. Side-channel queued messages still upload; only the marker is gated.
+
 ## [0.2.4] - 2026-04-01
 
 ### Added

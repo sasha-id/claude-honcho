@@ -281,24 +281,30 @@ export async function handleSessionEnd(): Promise<void> {
         })
       : [];
 
-    const endMarker = aiPeer.message(
-      `[Session ended] Reason: ${reason}, Messages: ${transcriptMessages.length}, Time: ${new Date().toISOString()}`,
-      {
-        createdAt: new Date().toISOString(),
-        metadata: {
-          instance_id: instanceId || undefined,
-          session_affinity: sessionName,
-        },
-      }
-    );
+    // Skip the [Session ended] marker for empty sessions — they emit
+    // useless "transcript exhaust" memory observations costing deriver tokens
+    // (e.g. "session ended at X with 0 messages" extracted as a durable fact).
+    // Side-channel queued messages still upload; only the marker is gated.
+    const endMarker = transcriptMessages.length > 0
+      ? aiPeer.message(
+          `[Session ended] Reason: ${reason}, Messages: ${transcriptMessages.length}, Time: ${new Date().toISOString()}`,
+          {
+            createdAt: new Date().toISOString(),
+            metadata: {
+              instance_id: instanceId || undefined,
+              session_affinity: sessionName,
+            },
+          }
+        )
+      : null;
 
     // Single addMessages call with everything — one round trip instead of three.
-    const allMessages = [...userMessages, ...aiMessages, endMarker];
+    const allMessages = [...userMessages, ...aiMessages, ...(endMarker ? [endMarker] : [])];
 
     if (allMessages.length > 0) {
       const meaningfulCount = assistantMessages.filter(m => m.isMeaningful).length;
       logApiCall("session.addMessages", "POST",
-        `${userMessages.length} user + ${aiMessages.length} assistant (${meaningfulCount} meaningful) + 1 marker`);
+        `${userMessages.length} user + ${aiMessages.length} assistant (${meaningfulCount} meaningful)${endMarker ? " + 1 marker" : " (no marker, empty session)"}`);
 
       // Start API upload immediately; run animation concurrently.
       const uploadPromise = session.addMessages(allMessages);
